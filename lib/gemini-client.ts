@@ -4,41 +4,46 @@ const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
 const genAI = new GoogleGenerativeAI(API_KEY);
 
 /**
- * ブラウザから直接Google Gemini File APIに動画をアップロードする
+ * ブラウザから直接Google Gemini File APIに動画をアップロードする（Resumable Upload方式）
  */
 async function uploadToGemini(file: File) {
-  const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${API_KEY}`;
-  
-  // 1. アップロードの初期化と実行（Simple Upload）
-  // 注意: 本来はResumable Uploadが望ましいが、実装の単純化のためfetchで直接送る方式をとる
-  const response = await fetch(uploadUrl, {
+  // 1. アップロードの初期化
+  const initUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${API_KEY}`;
+  const initResponse = await fetch(initUrl, {
     method: "POST",
     headers: {
-      "X-Goog-Upload-Protocol": "multipart",
+      "X-Goog-Upload-Protocol": "resumable",
+      "X-Goog-Upload-Command": "start",
+      "X-Goog-Upload-Header-Content-Length": file.size.toString(),
+      "X-Goog-Upload-Header-Content-Type": file.type,
+      "Content-Type": "application/json",
     },
-    body: createMultipartBody(file),
+    body: JSON.stringify({ file: { display_name: file.name } }),
   });
 
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error?.message || "Upload failed");
+  if (!initResponse.ok) {
+    const errorData = await initResponse.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || "Failed to initialize upload");
+  }
+
+  // 2. アップロード用URLを取得
+  const uploadUrl = initResponse.headers.get("X-Goog-Upload-URL");
+  if (!uploadUrl) throw new Error("Failed to get upload URL");
+
+  // 3. 実際のバイナリデータをアップロード
+  const uploadResponse = await fetch(uploadUrl, {
+    method: "POST",
+    headers: {
+      "X-Goog-Upload-Offset": "0",
+      "X-Goog-Upload-Command": "upload, finalize",
+    },
+    body: file,
+  });
+
+  const data = await uploadResponse.json();
+  if (!uploadResponse.ok) throw new Error(data.error?.message || "Upload failed");
   
   return data.file;
-}
-
-/**
- * マルチパートボディを作成（REST API用）
- */
-function createMultipartBody(file: File) {
-  const boundary = "-------Boundary" + Math.random().toString(16).slice(2);
-  const metadata = JSON.stringify({ file: { display_name: file.name } });
-  
-  const header = 
-    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n` +
-    `--${boundary}\r\nContent-Type: ${file.type}\r\n\r\n`;
-  const footer = `\r\n--${boundary}--`;
-
-  // Blobを使用してバイナリデータを結合
-  return new Blob([header, file, footer], { type: `multipart/related; boundary=${boundary}` });
 }
 
 /**
