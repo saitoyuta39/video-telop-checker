@@ -5,6 +5,7 @@ import VideoUploader from "@/components/VideoUploader";
 import GuidelineForm from "@/components/GuidelineForm";
 import AnalysisResults from "@/components/AnalysisResults";
 import { Sparkles, Settings2, Video as VideoIcon } from "lucide-react";
+import { analyzeVideoClient } from "@/lib/gemini-client";
 
 export default function Home() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -36,31 +37,23 @@ export default function Home() {
   const handleAnalyze = async () => {
     if (!videoFile) return;
 
+    if (!process.env.NEXT_PUBLIC_GEMINI_API_KEY) {
+      setError("APIキーが設定されていません。.env.local ファイルを確認してください。");
+      return;
+    }
+
     setIsAnalyzing(true);
     setError(null);
     setResults(null);
 
-    const formData = new FormData();
-    formData.append("video", videoFile);
-    formData.append("model", model);
-    formData.append("guidelines", guidelines);
-    formData.append("ngWords", ngWords);
-
     try {
-      const response = await fetch("/api/analyze", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error("解析中にエラーが発生しました。");
-      }
-
-      const data = await response.json();
+      // クライアントサイドで直接解析（Vercelの制限を回避）
+      const data = await analyzeVideoClient(videoFile, model, guidelines, ngWords);
       setResults(data.results);
       setLastCheckTime(new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }));
     } catch (err: any) {
-      setError(err.message || "予期せぬエラーが発生しました。");
+      console.error(err);
+      setError("解析に失敗しました。詳細: " + (err.message || "予期せぬエラー"));
     } finally {
       setIsAnalyzing(false);
     }
