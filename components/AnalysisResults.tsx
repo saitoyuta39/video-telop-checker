@@ -1,6 +1,7 @@
 "use client";
 
-import { CheckCircle2, AlertCircle, Clock, ChevronRight } from "lucide-react";
+import { useState } from "react";
+import { CheckCircle2, AlertCircle, Clock, ChevronRight, SlidersHorizontal } from "lucide-react";
 
 interface AnalysisItem {
   timecode: string;
@@ -8,6 +9,7 @@ interface AnalysisItem {
   suggested_text: string;
   reason: string;
   severity: "error" | "warning";
+  confidence: number;
 }
 
 interface Props {
@@ -15,8 +17,30 @@ interface Props {
   onTimestampClick: (timecode: string) => void;
 }
 
+const CONFIDENCE_THRESHOLD_DEFAULT = 0.9;
+
+function ConfidenceBadge({ confidence }: { confidence: number }) {
+  const percent = Math.round(confidence * 100);
+  let color = "bg-red-100 text-red-700 border-red-200";
+  if (confidence >= 0.9) color = "bg-emerald-100 text-emerald-700 border-emerald-200";
+  else if (confidence >= 0.7) color = "bg-blue-100 text-blue-700 border-blue-200";
+  else if (confidence >= 0.5) color = "bg-amber-100 text-amber-700 border-amber-200";
+
+  return (
+    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${color}`}>
+      確信度 {percent}%
+    </span>
+  );
+}
+
 export default function AnalysisResults({ results, onTimestampClick }: Props) {
+  const [threshold, setThreshold] = useState(CONFIDENCE_THRESHOLD_DEFAULT);
+  const [showFilter, setShowFilter] = useState(false);
+
   if (!results) return null;
+
+  const filteredResults = results.filter((item) => item.confidence >= threshold);
+  const hiddenCount = results.length - filteredResults.length;
 
   if (results.length === 0) {
     return (
@@ -43,14 +67,61 @@ export default function AnalysisResults({ results, onTimestampClick }: Props) {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setShowFilter(!showFilter)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+            showFilter
+              ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+          }`}
+        >
+          <SlidersHorizontal className="w-3.5 h-3.5" />
+          フィルター
+        </button>
+        {hiddenCount > 0 && (
+          <span className="text-[11px] text-slate-400">
+            確信度 {Math.round(threshold * 100)}% 未満の {hiddenCount}件 を非表示
+          </span>
+        )}
+      </div>
+
+      {showFilter && (
+        <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-slate-700">
+              確信度しきい値: {Math.round(threshold * 100)}%
+            </label>
+            <button
+              onClick={() => setThreshold(CONFIDENCE_THRESHOLD_DEFAULT)}
+              className="text-[10px] text-indigo-600 hover:underline"
+            >
+              リセット
+            </button>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={Math.round(threshold * 100)}
+            onChange={(e) => setThreshold(Number(e.target.value) / 100)}
+            className="w-full accent-indigo-600"
+          />
+          <div className="flex justify-between text-[10px] text-slate-400">
+            <span>0% (全て表示)</span>
+            <span>100% (高確信のみ)</span>
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-4">
-        {results.map((item, index) => (
+        {filteredResults.map((item, index) => (
           <div 
             key={index}
             className="bg-white border border-slate-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow group"
           >
             <div className="p-4 flex flex-col md:flex-row gap-6">
-              <div className="flex items-center gap-3 shrink-0">
+              <div className="flex items-center gap-3 shrink-0 flex-wrap">
                 <button 
                   onClick={() => onTimestampClick(item.timecode)}
                   className="bg-slate-900 text-white px-3 py-1.5 rounded-lg font-mono text-sm flex items-center gap-2 shadow-sm hover:bg-indigo-600 transition-colors group/time"
@@ -69,6 +140,7 @@ export default function AnalysisResults({ results, onTimestampClick }: Props) {
                     不一致
                   </span>
                 )}
+                <ConfidenceBadge confidence={item.confidence} />
               </div>
 
               <div className="flex-1 grid grid-cols-1 md:grid-cols-[1fr,auto,1fr] items-center gap-4">

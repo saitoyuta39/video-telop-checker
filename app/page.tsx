@@ -5,7 +5,7 @@ import VideoUploader from "@/components/VideoUploader";
 import GuidelineForm from "@/components/GuidelineForm";
 import AnalysisResults from "@/components/AnalysisResults";
 import { Sparkles, Settings2, Video as VideoIcon } from "lucide-react";
-import { analyzeVideoClient } from "@/lib/gemini-client";
+import { analyzeVideoClient, type AnalysisProgressPhase } from "@/lib/gemini-client";
 
 export default function Home() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -13,6 +13,7 @@ export default function Home() {
   const [guidelines, setGuidelines] = useState("");
   const [ngWords, setNgWords] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisPhase, setAnalysisPhase] = useState<AnalysisProgressPhase | null>(null);
   const [results, setResults] = useState<any[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastCheckTime, setLastCheckTime] = useState<string | null>(null);
@@ -43,12 +44,18 @@ export default function Home() {
     }
 
     setIsAnalyzing(true);
+    setAnalysisPhase(null);
     setError(null);
     setResults(null);
 
     try {
-      // クライアントサイドで直接解析（Vercelの制限を回避）
-      const data = await analyzeVideoClient(videoFile, model, guidelines, ngWords);
+      const data = await analyzeVideoClient(
+        videoFile,
+        model,
+        guidelines,
+        ngWords,
+        (phase) => setAnalysisPhase(phase)
+      );
       setResults(data.results);
       setLastCheckTime(new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" }));
     } catch (err: any) {
@@ -56,6 +63,7 @@ export default function Home() {
       setError("解析に失敗しました。詳細: " + (err.message || "予期せぬエラー"));
     } finally {
       setIsAnalyzing(false);
+      setAnalysisPhase(null);
     }
   };
 
@@ -105,7 +113,10 @@ export default function Home() {
               {isAnalyzing ? (
                 <>
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  解析中...
+                  {analysisPhase === "uploading" && "動画をアップロード中..."}
+                  {analysisPhase === "processing" && "動画を処理中..."}
+                  {analysisPhase === "analyzing" && "テロップの誤字脱字を解析中..."}
+                  {(!analysisPhase || analysisPhase === "done") && "解析中..."}
                 </>
               ) : (
                 <>
