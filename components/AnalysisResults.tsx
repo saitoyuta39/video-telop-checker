@@ -34,15 +34,13 @@ function ConfidenceBadge({ confidence }: { confidence: number }) {
 }
 
 export default function AnalysisResults({ results, onTimestampClick }: Props) {
-  const [threshold, setThreshold] = useState(CONFIDENCE_THRESHOLD_DEFAULT);
-  const [showFilter, setShowFilter] = useState(false);
-
   if (!results) return null;
 
+  const threshold = 0.9;
   const filteredResults = results.filter((item) => item.confidence >= threshold);
   const hiddenCount = results.length - filteredResults.length;
 
-  if (results.length === 0) {
+  if (results.length === 0 || filteredResults.length === 0) {
     return (
       <div className="bg-emerald-50 border border-emerald-100 p-12 rounded-[2rem] text-center space-y-4 shadow-sm">
         <div className="bg-white w-20 h-20 rounded-3xl flex items-center justify-center mx-auto shadow-sm text-emerald-500 transform rotate-3 hover:rotate-0 transition-transform duration-300">
@@ -50,10 +48,12 @@ export default function AnalysisResults({ results, onTimestampClick }: Props) {
         </div>
         <div className="space-y-2">
           <h3 className="text-xl font-bold text-emerald-900 tracking-tight">
-            パーフェクト！誤字脱字は見つかりませんでした
+            {results.length === 0 ? "パーフェクト！誤字脱字は見つかりませんでした" : "精度の高い誤字は見つかりませんでした"}
           </h3>
           <p className="text-emerald-700/80 text-sm max-w-sm mx-auto leading-relaxed">
-            AIが動画内のテロップを全編チェックしましたが、修正が必要な箇所は検出されませんでした。素晴らしいクオリティです！
+            {results.length === 0 
+              ? "AIが動画内のテロップを全編チェックしましたが、修正が必要な箇所は検出されませんでした。素晴らしいクオリティです！"
+              : `AIがいくつかの候補を検出しましたが、確信度が低いため（90%未満）表示を控えています。現在表示される明らかな誤字はありません。`}
           </p>
         </div>
         <div className="pt-2">
@@ -67,50 +67,11 @@ export default function AnalysisResults({ results, onTimestampClick }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => setShowFilter(!showFilter)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-            showFilter
-              ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-          }`}
-        >
-          <SlidersHorizontal className="w-3.5 h-3.5" />
-          フィルター
-        </button>
-        {hiddenCount > 0 && (
-          <span className="text-[11px] text-slate-400">
-            確信度 {Math.round(threshold * 100)}% 未満の {hiddenCount}件 を非表示
+      {hiddenCount > 0 && (
+        <div className="flex justify-end">
+          <span className="text-[11px] font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
+            AIの確信度が低い指摘（{hiddenCount}件）を非表示にしています
           </span>
-        )}
-      </div>
-
-      {showFilter && (
-        <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold text-slate-700">
-              確信度しきい値: {Math.round(threshold * 100)}%
-            </label>
-            <button
-              onClick={() => setThreshold(CONFIDENCE_THRESHOLD_DEFAULT)}
-              className="text-[10px] text-indigo-600 hover:underline"
-            >
-              リセット
-            </button>
-          </div>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={Math.round(threshold * 100)}
-            onChange={(e) => setThreshold(Number(e.target.value) / 100)}
-            className="w-full accent-indigo-600"
-          />
-          <div className="flex justify-between text-[10px] text-slate-400">
-            <span>0% (全て表示)</span>
-            <span>100% (高確信のみ)</span>
-          </div>
         </div>
       )}
 
